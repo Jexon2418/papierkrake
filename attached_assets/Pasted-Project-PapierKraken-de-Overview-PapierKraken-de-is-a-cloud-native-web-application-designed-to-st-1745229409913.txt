@@ -1,0 +1,317 @@
+Project: PapierKraken.de
+Overview: PapierKraken.de is a cloud-native web application designed to streamline document management by leveraging AI-powered classification, transcription, and metadata extraction. The user can quickly upload PDFs or images of documents without unnecessary prompts, and the system will automatically classify, index, and store them in the appropriate folders. The platform will support inline text or voice annotations, offline caching, user authentication, and an API-first design to accommodate future mobile applications.
+
+The main language of Appliacation is GERMAN, but English is the second language. (ALL code comments please make in English)
+
+1. Objectives
+Fast, frictionless document upload: Single-click or drag-and-drop uploads for PDFs and images.
+
+
+Automated classification: AI-driven sorting into pre-defined categories (e.g., invoices, tax notices, complaints).
+
+
+Text transcription: OCR-powered extraction of text for full-text search.
+
+
+Annotations: Support for text comments and voice notes attached to each document.
+
+
+Offline capability: Local caching of uploads when offline, with visual indicators for pending sync.
+
+
+Metadata tracking & notifications: Extraction of key metadata (dates, amounts) and overview dashboard with payment/reminder alerts.
+
+
+Scalable cloud storage: Use Amazon S3 (or equivalent) for durable, cost-efficient storage.
+
+
+User management: Secure authentication and role-based access for multiple users.
+
+
+Extensible API: REST/GraphQL endpoints for future mobile app integration and third-party clients.
+
+
+AI engine: Leverage OpenAI for document understanding, classification, transcription, and voice message generation.
+
+
+
+2. Scope of Work
+Detailed technical specification document suitable for implementation by Replit engineers.
+
+
+Wireframes or high-level mockups of key screens and user flows.
+
+
+Definition of data models, API contracts, and folder structure.
+
+
+Infrastructure diagram and deployment plan.
+
+
+Technology stack recommendation tailored for Replit compatibility.
+
+
+
+3. Functional Requirements
+Document Upload
+
+
+Drag-and-drop zone and file picker.
+
+
+Accept PDF, JPEG, PNG.
+
+
+Immediate client-side validation (file size/type).
+
+
+AI Classification & Transcription
+
+
+Send binary to serverless function.
+
+
+Invoke OpenAI OCR or hosted OCR for text extraction.
+
+
+Classify using OpenAI completion with category prompts.
+
+
+Store classification label and confidence score.
+
+
+Folder Organization
+
+
+Pre-defined folders: Invoices, Claims, Tax Documents, Others.
+
+
+Auto-move document to appropriate S3 prefix (e.g., invoices/2025/04/).
+
+
+Annotations
+
+
+Text comment editor (rich-text textarea).
+
+
+Voice note recorder (Web Audio API).
+
+
+Attachments stored alongside document with links.
+
+
+Offline Caching
+
+
+IndexedDB or service worker for temporary storage.
+
+
+UI badge indicating unsynced docs.
+
+
+Automatic sync upon network restoration.
+
+
+Search & Transcription
+
+
+Full-text search powered by Elasticsearch or OpenSearch.
+
+
+Show snippets and highlight terms.
+
+
+Metadata Dashboard
+
+
+Extract date, invoice amounts, due dates.
+
+
+Notify via dashboard widget: upcoming payments, pending responses.
+
+
+Filter by voice/text overview commands.
+
+
+User System
+
+
+Email/password authentication (JWT tokens).
+
+
+Role-based access (admin, user).
+
+
+Password reset and email verification.
+
+
+API Layer
+
+
+REST or GraphQL endpoints for all CRUD operations.
+
+
+Secure with OAuth2 or JWT.
+
+
+Documentation via OpenAPI/Swagger.
+
+
+
+4. Non-Functional Requirements
+Performance: Page load <2s, upload latency <500ms (excluding OCR).
+
+
+Scalability: Stateless services, horizontal scaling.
+
+
+Reliability: 99.9% uptime.
+
+
+Security: HTTPS everywhere, encryption at rest (S3 SSE), OWASP best practices.
+
+
+Maintainability: Modular code, clear separation of concerns.
+
+
+Localization: English by default; prepare for i18n.
+
+
+
+5. Technical Architecture
+[ Client Browser ]
+     |
+     |-- Service Worker & IndexedDB (Offline Cache)
+     |
+[ Frontend: React + Vite ]
+     |
+     |-- Auth Module (JWT)
+     |-- Upload & UI Components
+     |-- Annotation Widgets
+     |
+[ API Gateway / Serverless Functions ]
+     |
+     |-- Auth (NextAuth.js or custom)
+     |-- Document Processor (OCR & Classification)
+     |-- Metadata Extractor
+     |-- Notification Service
+     |
+[ Database: PostgreSQL or MySQL ]
+     |
+     |-- Users, Documents metadata, Annotations
+     |
+[ Search: OpenSearch/Elasticsearch ]
+     |
+     |-- Index of transcribed text & metadata
+     |
+[ Storage: Amazon S3 ]
+     |
+     |-- Bucket: papierkraken-docs
+     |   prefixes per category/year/month
+
+
+6. Technology Stack Recommendations
+Frontend: React + Vite; Tailwind CSS; Web Audio API; React Query.
+
+
+Backend: Node.js with Express or Fastify; or Python (FastAPI) in Replit.
+
+
+Serverless Functions: Replit deployments (R.T.E. or Workers), or AWS Lambda compatibility.
+
+
+Database: CockroachDB (available on Replit) or PostgreSQL.
+
+
+Search: Elastic Cloud or self-hosted OpenSearch.
+
+
+Storage: AWS S3 (via AWS SDK v3).
+
+
+AI Integration: OpenAI Node/Python SDK.
+
+
+Authentication: NextAuth.js or Auth0.
+
+
+CI/CD: Replit Git integration + GitHub Actions for staging.
+
+
+
+7. Replit-Specific Considerations
+Use Replit's replit.toml to define run commands and environment.
+
+
+Install necessary secrets (AZURE_OPENAI_KEY, AWS_*, DB credentials) and configure the Azure OpenAI endpoint in Replit Secrets.
+
+
+Ensure serverless function entrypoints conform to Replit's runner.
+
+
+Test resource limits: memory ≤1GB, CPU ≤2 cores.
+
+
+Use Replit Always-On for critical background jobs (e.g., notifications).
+
+
+
+8. Data Models & API Endpoints (High-Level)
+Document
+id (uuid), user_id, filename, category, s3_key, ocr_text, status, uploaded_at
+
+
+Annotation
+id, document_id, user_id, type (text/voice), content_url, created_at
+
+
+User
+id, email, password_hash, role, created_at
+
+
+Endpoints (REST)
+POST /api/upload – multipart upload
+
+
+GET /api/documents?filter=&search=
+
+
+GET /api/documents/{id}
+
+
+POST /api/documents/{id}/annotations
+
+
+GET /api/notifications/overview
+
+
+
+9. Security & Compliance
+Enforce HTTPS; use HSTS.
+
+
+Input validation and sanitization.
+
+
+Rate limiting on upload endpoints.
+
+
+Ensure S3 buckets are private; signed URLs for access.
+
+
+GDPR compliance: user data deletion on request.
+
+
+
+10. Testing & QA
+Unit tests for all services (Jest or PyTest).
+
+
+Integration tests for API endpoints.
+
+
+End-to-end tests (Cypress/Playwright).
+
+
+Load testing using k6 or Locust.
