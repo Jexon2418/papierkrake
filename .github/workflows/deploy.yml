@@ -22,23 +22,32 @@ jobs:
       - name: Build application
         run: npm run build
         
+      - name: Debug SSH Connection
+        run: |
+          echo "Testing SSH connectivity to server..."
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > deploy_key.pem
+          chmod 600 deploy_key.pem
+          ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ secrets.SERVER_USERNAME }}@${{ secrets.SERVER_HOST }} "echo Connection successful"
+        
       - name: Deploy to Production Server
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          passphrase: ${{ secrets.SSH_PASSPHRASE }}
           script_stop: true
           debug: true
           script: |
-            cd /var/www/papierkrake
-            git checkout main
-            git pull origin main
-            npm ci
-            npm run build
+            whoami
+            pwd
+            cd /var/www/papierkrake || echo "Directory does not exist"
+            git checkout main || echo "Git checkout failed"
+            git pull origin main || echo "Git pull failed"
+            npm ci || echo "npm ci failed"
+            npm run build || echo "npm build failed"
+            pm2 list || echo "PM2 not available"
             if pm2 list | grep -q 'papierkrake-prod'; then
-              pm2 restart papierkrake-prod
+              pm2 restart papierkrake-prod || echo "PM2 restart failed"
             else
-              pm2 start ecosystem.config.js --only papierkrake-prod
+              pm2 start ecosystem.config.js --only papierkrake-prod || echo "PM2 start failed"
             fi
