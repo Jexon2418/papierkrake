@@ -13,7 +13,28 @@ import {
   insertFolderSchema 
 } from "@shared/schema";
 import { classifyDocument, extractTextFromImage } from "./openai";
-import { generateS3Key, uploadFile, getSignedDownloadUrl, deleteFile } from "./s3";
+import { 
+  generateS3Key, 
+  uploadFile, 
+  getSignedDownloadUrl, 
+  deleteFile,
+  verifyUserFileAccess,
+  isFileTypeAllowed,
+  isFileSizeAllowed,
+  ALLOWED_FILE_TYPES
+} from "./s3";
+
+// Extend Express Request to include user property
+declare global {
+  namespace Express {
+    interface Request {
+      user: {
+        id: number;
+        username: string;
+      };
+    }
+  }
+}
 
 const JWT_SECRET = process.env.JWT_SECRET || "papierkraken-secret-key";
 const upload = multer({ dest: "uploads/" });
@@ -184,6 +205,120 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get a pre-signed URL for direct S3 upload
+  app.post("/api/documents/presigned-upload", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const { filename, contentType, category } = req.body;
+      
+      if (!filename || !contentType) {
+        return res.status(400).json({ 
+          message: "Dateiname und Content-Type erforderlich" 
+        });
+      }
+      
+      // Validate file type
+      if (!isFileTypeAllowed(contentType)) {
+        return res.status(400).json({ 
+          message: "Nicht unterstütztes Dateiformat",
+          allowedTypes: "PDF, JPG, JPEG, PNG, GIF, XML, DOC, DOCX"
+        });
+      }
+      
+      // Generate S3 key with user isolation
+      const s3Key = generateS3Key(filename, userId, category || 'documents');
+      
+      // Generate pre-signed URL for upload (5 minute expiry)
+      const uploadUrl = await getSignedUploadUrl(s3Key, contentType);
+      
+      res.status(200).json({
+        uploadUrl,
+        s3Key,
+        expires: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes from now
+      });
+    } catch (error) {
+      console.error("Pre-signed URL generation error:", error);
+      res.status(500).json({ 
+        message: "Fehler beim Generieren der Upload-URL",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // Complete upload after direct S3 upload
+  app.post("/api/documents/complete-upload", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const { s3Key, originalFilename, fileSize, contentType, category } = req.body;
+      
+      if (!s3Key || !originalFilename || !fileSize || !contentType) {
+        return res.status(400).json({ 
+          message: "Unvollständige Informationen" 
+        });
+      }
+      
+      // Verify user has access to this file path (user isolation)
+      if (!verifyUserFileAccess(userId, s3Key)) {
+        return res.status(403).json({ 
+          message: "Zugriff verweigert - ungültiger Dateipfad" 
+        });
+      }
+      
+      // Validate file size
+      if (!isFileSizeAllowed(fileSize)) {
+        return res.status(400).json({ 
+          message: "Datei zu groß",
+          maxSize: "50 MB"
+        });
+      }
+      
+      // For images, we would extract text via OCR
+      // For PDFs, we would use a PDF parser
+      // Simplified for this example
+      let extractedText = "";
+      let classification = {
+        category: category as any || 'OTHER',
+        confidence: 0,
+        metadata: {}
+      };
+      
+      // Create document record in database
+      const newDocument = await storage.createDocument({
+        userId,
+        filename: path.basename(s3Key),
+        originalFilename,
+        s3Key,
+        fileType: contentType.split('/')[1].toUpperCase(),
+        fileSize,
+        category: classification.category,
+        status: 'COMPLETED',
+        isOffline: false,
+      });
+      
+      // Update document with metadata
+      const updatedDocument = await storage.updateDocument(newDocument.id, {
+        ocrText: extractedText,
+        metadata: classification.metadata
+      });
+      
+      // Generate download URL
+      const downloadUrl = await getSignedDownloadUrl(s3Key);
+      
+      res.status(201).json({ 
+        document: { 
+          ...updatedDocument,
+          downloadUrl
+        } 
+      });
+    } catch (error) {
+      console.error("Complete upload error:", error);
+      res.status(500).json({ 
+        message: "Fehler beim Abschließen des Uploads",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
   app.get("/api/documents/status", authenticateToken, async (req, res) => {
     try {
       const userId = req.user.id;
