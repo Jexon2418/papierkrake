@@ -3,9 +3,11 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import crypto from 'crypto';
 import path from 'path';
 
-// Create an S3 client
+// Create an S3 client with the same region as the KMS key
+// KMS keys are region-specific, so we need to make sure the S3 client
+// and the bucket are in the same region as the KMS key
 const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: process.env.AWS_REGION || 'eu-central-1', // Updated to match KMS key region
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
@@ -13,7 +15,7 @@ const s3Client = new S3Client({
 });
 
 // Bucket name and configuration
-const BUCKET_NAME = process.env.S3_BUCKET || 'papierkraken-docs';
+const BUCKET_NAME = process.env.S3_BUCKET || 'papierkraken-docs-eu';
 const KMS_KEY_ARN = process.env.KMS_KEY_ARN;
 const URL_EXPIRY = 5 * 60; // 5 minutes in seconds
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
