@@ -1,28 +1,29 @@
 import OpenAI from "openai";
 import { DocumentCategory, DOCUMENT_CATEGORIES } from "@shared/schema";
+import config from "./config";
 
-// Initialize Azure OpenAI client
-const apiKey = process.env.OPENAI_API_KEY;
-const azureApiKey = process.env.AZURE_OPENAI_KEY;
-const azureEndpoint = process.env.AZURE_OPENAI_ENDPOINT;
-const azureDeploymentName = process.env.AZURE_OPENAI_DEPLOYMENT_NAME || 'gpt-4o';
+// Access AI config from centralized config
+const aiConfig = config.ai;
 
 // Check if we have Azure configuration
-const useAzure = azureApiKey && azureEndpoint;
+const useAzure = aiConfig.azureApiKey && aiConfig.azureEndpoint;
 
 let openai: OpenAI;
 
 if (useAzure) {
   console.log("Using Azure OpenAI configuration");
+  console.log(`- Azure Endpoint: ${aiConfig.azureEndpoint}`);
+  console.log(`- Azure Deployment: ${aiConfig.azureDeploymentName}`);
+  
   openai = new OpenAI({
-    apiKey: azureApiKey,
-    baseURL: `${azureEndpoint}/openai/deployments/${azureDeploymentName}`,
-    defaultQuery: { "api-version": "2023-12-01-preview" },
-    defaultHeaders: { "api-key": azureApiKey },
+    apiKey: aiConfig.azureApiKey,
+    baseURL: `${aiConfig.azureEndpoint}/openai/deployments/${aiConfig.azureDeploymentName}`,
+    defaultQuery: { "api-version": aiConfig.apiVersion },
+    defaultHeaders: { "api-key": aiConfig.azureApiKey },
   });
-} else if (apiKey) {
+} else if (aiConfig.openaiApiKey) {
   console.log("Using standard OpenAI configuration");
-  openai = new OpenAI({ apiKey });
+  openai = new OpenAI({ apiKey: aiConfig.openaiApiKey });
 } else {
   console.error("No OpenAI API keys provided. Please set OPENAI_API_KEY or AZURE_OPENAI_KEY and AZURE_OPENAI_ENDPOINT");
   // Create a placeholder client that will throw meaningful errors
@@ -86,7 +87,7 @@ export async function classifyDocument(
     `;
 
     // Use the appropriate model name - for Azure, this would be the deployment name
-    const modelName = useAzure ? azureDeploymentName : "gpt-4o";
+    const modelName = useAzure ? aiConfig.azureDeploymentName : aiConfig.defaultModel;
     
     const response = await openai.chat.completions.create({
       model: modelName, // Use appropriate model based on whether we're using Azure or standard OpenAI
@@ -122,7 +123,7 @@ export async function classifyDocument(
 export async function extractTextFromImage(base64Image: string): Promise<string> {
   try {
     // Use the appropriate model name - for Azure, this would be the deployment name 
-    const modelName = useAzure ? azureDeploymentName : "gpt-4o";
+    const modelName = useAzure ? aiConfig.azureDeploymentName : aiConfig.defaultModel;
     
     const response = await openai.chat.completions.create({
       model: modelName, // Use appropriate model based on whether we're using Azure or standard OpenAI
@@ -143,7 +144,7 @@ export async function extractTextFromImage(base64Image: string): Promise<string>
           ],
         },
       ],
-      max_tokens: 1000,
+      max_tokens: aiConfig.maxTokens,
     });
 
     return response.choices[0].message.content || "";
