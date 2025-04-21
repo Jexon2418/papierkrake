@@ -2,23 +2,27 @@ import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } fro
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import crypto from 'crypto';
 import path from 'path';
+import config from './config';
 
 // Create an S3 client with the same region as the KMS key
 // KMS keys are region-specific, so we need to make sure the S3 client
 // and the bucket are in the same region as the KMS key
 const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'eu-central-1', // Updated to match KMS key region
+  region: config.storage.region,
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
   },
 });
 
-// Bucket name and configuration
-const BUCKET_NAME = process.env.S3_BUCKET || 'papierkraken-docs-eu';
-const KMS_KEY_ARN = process.env.KMS_KEY_ARN;
-const URL_EXPIRY = 5 * 60; // 5 minutes in seconds
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+// Environment-specific prefix from config
+const S3_PREFIX = config.storage.prefix;
+
+// Bucket name and configuration from config
+const BUCKET_NAME = config.storage.bucket;
+const KMS_KEY_ARN = config.storage.kmsKeyArn;
+const URL_EXPIRY = config.storage.urlExpiry;
+const MAX_FILE_SIZE = config.storage.maxFileSize;
 
 // Valid file types
 export const ALLOWED_FILE_TYPES = [
@@ -57,15 +61,16 @@ export function isFileSizeAllowed(size: number): boolean {
 }
 
 /**
- * Generates a secure S3 key with user isolation
+ * Generates a secure S3 key with user isolation and environment separation
  */
 export function generateS3Key(originalFilename: string, userId: number, category?: string): string {
   const ext = path.extname(originalFilename).toLowerCase();
   const timestamp = Date.now();
   const randomString = crypto.randomBytes(8).toString('hex');
   
-  // User isolation: Store each user's files under prefix: users/{userId}/
-  return `users/${userId}/${category || 'documents'}/${timestamp}-${randomString}${ext}`;
+  // Environment isolation: Use the environment-specific prefix
+  // Format: users/{env}/{userId}/{category}/{timestamp}-{random}.{ext}
+  return `${S3_PREFIX}${userId}/${category || 'documents'}/${timestamp}-${randomString}${ext}`;
 }
 
 /**
@@ -148,6 +153,7 @@ export async function deleteFile(key: string): Promise<void> {
  * This ensures user isolation at the application level
  */
 export function verifyUserFileAccess(userId: number, s3Key: string): boolean {
-  const userPrefix = `users/${userId}/`;
+  // Check if the S3 key starts with the environment-specific prefix for this user
+  const userPrefix = `${S3_PREFIX}${userId}/`;
   return s3Key.startsWith(userPrefix);
 }

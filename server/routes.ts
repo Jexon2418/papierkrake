@@ -37,7 +37,10 @@ declare global {
   }
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || "papierkraken-secret-key";
+import config from './config';
+
+const JWT_SECRET = config.auth.jwtSecret;
+const JWT_EXPIRY = config.auth.jwtExpiry;
 const upload = multer({ dest: "uploads/" });
 
 // Helper function for authentication middleware
@@ -84,7 +87,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const token = jwt.sign(
         { id: user.id, username: user.username },
         JWT_SECRET,
-        { expiresIn: '7d' }
+        { expiresIn: JWT_EXPIRY }
       );
       
       res.status(201).json({ 
@@ -121,7 +124,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const token = jwt.sign(
         { id: user.id, username: user.username },
         JWT_SECRET,
-        { expiresIn: '7d' }
+        { expiresIn: JWT_EXPIRY }
       );
       
       res.json({ 
