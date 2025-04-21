@@ -13,6 +13,7 @@ import {
   type InsertFolder,
   type DocumentCategory,
 } from "@shared/schema";
+import bcrypt from "bcrypt";
 
 // Interface for storage operations
 export interface IStorage {
@@ -67,6 +68,27 @@ export class MemStorage implements IStorage {
 
     // Initialize with system folders
     this.initializeSystemFolders();
+    
+    // Initialize test user
+    this.initTestUser();
+  }
+  
+  private async initTestUser() {
+    // Check if test user already exists
+    const existingUser = await this.getUserByUsername("jexon");
+    if (!existingUser) {
+      // Create test user with bcrypt-hashed password
+      const hashedPassword = await bcrypt.hash("Test123!", 10);
+      
+      await this.createUser({
+        username: "jexon",
+        password: hashedPassword,
+        email: "jexon@example.com",
+        fullName: "Test User"
+      });
+      
+      console.log("Test user 'jexon' created successfully");
+    }
   }
 
   private initializeSystemFolders() {
