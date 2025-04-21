@@ -248,13 +248,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const filePath = file.path;
       const fileSize = file.size;
       const mimeType = file.mimetype;
+      const category = req.body.category || 'documents';
       
-      // File validation
-      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+      // File validation - MIME type and file size
+      const allowedTypes = [
+        'application/pdf', 'image/jpeg', 'image/png', 'image/gif', 
+        'application/xml', 'application/msword', 
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ];
       if (!allowedTypes.includes(mimeType)) {
         // Clean up
         fs.unlinkSync(filePath);
-        return res.status(400).json({ message: "Nicht unterstütztes Dateiformat" });
+        return res.status(400).json({ 
+          message: "Nicht unterstütztes Dateiformat",
+          allowedTypes: "PDF, JPG, JPEG, PNG, GIF, XML, DOC, DOCX"
+        });
+      }
+      
+      // Validate file size (50 MB max)
+      const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+      if (fileSize > MAX_FILE_SIZE) {
+        // Clean up
+        fs.unlinkSync(filePath);
+        return res.status(400).json({ 
+          message: "Datei zu groß",
+          maxSize: "50 MB"
+        });
       }
       
       // Read file content
@@ -271,10 +290,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         extractedText = "PDF Content - requires PDF parsing library";
       }
       
-      // Generate S3 key for the file
-      const s3Key = generateS3Key(originalFilename, userId);
+      // Generate S3 key with user isolation
+      // Format: users/{userId}/{category}/{timestamp}-{random}.{ext}
+      const s3Key = generateS3Key(originalFilename, userId, category);
       
-      // Upload to S3
+      // Upload to S3 with server-side encryption
       await uploadFile(fileBuffer, s3Key, mimeType);
       
       // Classify document using OCR text and filename
@@ -288,7 +308,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         s3Key,
         fileType: mimeType.split('/')[1].toUpperCase(),
         fileSize,
-        category: classification.category,
+        category: classification.category || category,
         status: 'COMPLETED',
         isOffline: false,
       });
@@ -305,7 +325,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Clean up temporary file
       fs.unlinkSync(filePath);
       
-      // Generate download URL
+      // Generate download URL (expires in 5 minutes)
       const downloadUrl = await getSignedDownloadUrl(s3Key);
       
       res.status(201).json({ 
