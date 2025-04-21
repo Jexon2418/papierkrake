@@ -36,17 +36,16 @@ jobs:
           script_stop: true
           debug: true
           script: |
-  echo "==== Starting deployment ===="
-  whoami
-  echo "==== Current directory ===="
-  pwd
-  echo "==== Changing to application directory ===="
-  cd /var/www/papierkrake || echo "Directory does not exist"
-  echo "==== Current git status ===="
-  git status
-  echo "==== Fetching from remote ===="
-  git fetch origin
-  echo "==== Available branches ===="
-  git branch -a
-  echo "==== Checking out branch ===="
-  # Rest of the script...script: |
+            whoami
+            pwd
+            cd /var/www/papierkrake || echo "Directory does not exist"
+            git checkout dev || echo "Git checkout failed"
+            git pull origin dev || echo "Git pull failed"
+            npm ci || echo "npm ci failed"
+            npm run build || echo "npm build failed"
+            pm2 list || echo "PM2 not available"
+            if pm2 list | grep -q 'papierkrake-dev'; then
+              pm2 restart papierkrake-dev || echo "PM2 restart failed"
+            else
+              pm2 start ecosystem.config.js --only papierkrake-dev || echo "PM2 start failed"
+            fi
