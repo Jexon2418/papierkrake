@@ -16,7 +16,8 @@ import { classifyDocument, extractTextFromImage } from "./openai";
 import { 
   generateS3Key, 
   uploadFile, 
-  getSignedDownloadUrl, 
+  getSignedDownloadUrl,
+  getSignedUploadUrl,
   deleteFile,
   verifyUserFileAccess,
   isFileTypeAllowed,
