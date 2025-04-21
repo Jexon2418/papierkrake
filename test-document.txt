@@ -1,0 +1,3 @@
+This is a test document for PapierKraken.de
+It contains some basic text that will be uploaded to our secure S3 storage.
+The document should be properly encrypted and stored with user isolation.
