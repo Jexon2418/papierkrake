@@ -1,8 +1,33 @@
 import OpenAI from "openai";
 import { DocumentCategory, DOCUMENT_CATEGORIES } from "@shared/schema";
 
-// Initialize OpenAI client
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || process.env.AZURE_OPENAI_KEY });
+// Initialize Azure OpenAI client
+const apiKey = process.env.OPENAI_API_KEY;
+const azureApiKey = process.env.AZURE_OPENAI_KEY;
+const azureEndpoint = process.env.AZURE_OPENAI_ENDPOINT;
+const azureDeploymentName = process.env.AZURE_OPENAI_DEPLOYMENT_NAME || 'gpt-4o';
+
+// Check if we have Azure configuration
+const useAzure = azureApiKey && azureEndpoint;
+
+let openai: OpenAI;
+
+if (useAzure) {
+  console.log("Using Azure OpenAI configuration");
+  openai = new OpenAI({
+    apiKey: azureApiKey,
+    baseURL: `${azureEndpoint}/openai/deployments/${azureDeploymentName}`,
+    defaultQuery: { "api-version": "2023-12-01-preview" },
+    defaultHeaders: { "api-key": azureApiKey },
+  });
+} else if (apiKey) {
+  console.log("Using standard OpenAI configuration");
+  openai = new OpenAI({ apiKey });
+} else {
+  console.error("No OpenAI API keys provided. Please set OPENAI_API_KEY or AZURE_OPENAI_KEY and AZURE_OPENAI_ENDPOINT");
+  // Create a placeholder client that will throw meaningful errors
+  openai = new OpenAI({ apiKey: "placeholder" });
+}
 
 // Type for document classification result
 type ClassificationResult = {
@@ -60,8 +85,11 @@ export async function classifyDocument(
       }
     `;
 
+    // Use the appropriate model name - for Azure, this would be the deployment name
+    const modelName = useAzure ? azureDeploymentName : "gpt-4o";
+    
     const response = await openai.chat.completions.create({
-      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      model: modelName, // Use appropriate model based on whether we're using Azure or standard OpenAI
       messages: [
         { role: "system", content: "Du bist ein Dokumentenklassifizierungssystem, das deutsche und englische Dokumente verarbeitet." },
         { role: "user", content: prompt }
@@ -93,8 +121,11 @@ export async function classifyDocument(
  */
 export async function extractTextFromImage(base64Image: string): Promise<string> {
   try {
+    // Use the appropriate model name - for Azure, this would be the deployment name 
+    const modelName = useAzure ? azureDeploymentName : "gpt-4o";
+    
     const response = await openai.chat.completions.create({
-      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      model: modelName, // Use appropriate model based on whether we're using Azure or standard OpenAI
       messages: [
         {
           role: "user",
