@@ -1,18 +1,56 @@
-script: |
-  echo "==== Starting deployment to TEST environment ===="
-  cd /var/www/papierkrake || exit 1
-  echo "==== Current branch status ===="
-  git branch
-  echo "==== Fetching latest changes ===="
-  git fetch origin test
-  echo "==== Checking out test branch ===="
-  git checkout test
-  echo "==== Pulling latest changes ===="
-  git reset --hard origin/test
-  echo "==== Installing dependencies ===="
-  npm ci
-  echo "==== Building application ===="
-  npm run build
-  echo "==== Restarting application ===="
-  pm2 restart papierkrake-test || pm2 start ecosystem.config.js --only papierkrake-test
-  echo "==== Deployment completed ===="
+name: Deploy PapierKrake to Test
+on:
+  push:
+    branches: [ test ]
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Build application
+        run: npm run build
+        
+      - name: Debug SSH Connection
+        run: |
+          echo "Testing SSH connectivity to server..."
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > deploy_key.pem
+          chmod 600 deploy_key.pem
+          ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ secrets.SERVER_USERNAME }}@${{ secrets.SERVER_HOST }} "echo Connection successful"
+        
+      - name: Deploy to Test Server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          debug: true
+          script: |
+  whoami
+  pwd
+  cd /var/www/papierkrake || echo "Directory does not exist"
+  git fetch origin
+  if git show-ref --verify --quiet refs/heads/test; then
+    git checkout test || echo "Git checkout failed"
+    git pull origin test || echo "Git pull failed"
+  else
+    git checkout -b test origin/test || echo "Git branch creation failed"
+  fi
+  npm ci || echo "npm ci failed"
+  npm run build || echo "npm build failed"
+  pm2 list || echo "PM2 not available"
+  if pm2 list | grep -q 'papierkrake-test'; then
+    pm2 restart papierkrake-test || echo "PM2 restart failed"
+  else
+    pm2 start ecosystem.config.js --only papierkrake-test || echo "PM2 start failed"
+  fi
